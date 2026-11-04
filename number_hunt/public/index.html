@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080b18">
+  <meta name="description" content="Number Hunt — a two-player boundary guessing challenge.">
+  <title>Number Hunt | Boundary Challenge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">N<span>H</span></span>
+      <span>NUMBER<span class="brand-light">HUNT</span></span>
+    </a>
+    <div class="top-status"><span class="pulse"></span> REAL-TIME ARENA</div>
+  </header>
+
+  <main class="shell">
+    <section class="hero" id="hero">
+      <div class="eyebrow"><span class="eyebrow-line"></span> TWO PLAYERS. ONE SECRET. <span class="eyebrow-line"></span></div>
+      <h1>THINK YOU CAN<br><span>FIND THE NUMBER?</span></h1>
+      <p class="hero-copy">Read the clues. Shrink the boundaries. Beat your opponent.</p>
+      <div class="hero-orbit" aria-hidden="true">
+        <span class="orbit-number n-one">17</span>
+        <span class="orbit-number n-two">42</span>
+        <span class="orbit-number n-three">86</span>
+        <div class="target-ring"><div class="target-core">?</div></div>
+      </div>
+    </section>
+
+    <section class="panel lobby" id="lobby">
+      <div class="panel-heading">
+        <div><span class="section-kicker">01 / ENTER THE ARENA</span><h2>Set up your match</h2></div>
+        <span class="live-tag">ONLINE PLAY</span>
+      </div>
+      <label class="field-label" for="playerName">YOUR PLAYER NAME</label>
+      <input id="playerName" class="text-input" maxlength="18" placeholder="Enter your name" autocomplete="nickname">
+      <div class="lobby-grid">
+        <div class="lobby-option">
+          <div class="option-icon">✦</div>
+          <h3>Create a room</h3>
+          <p>Host the match and invite a friend.</p>
+          <label class="field-label" for="roundCount">NUMBER OF ROUNDS</label>
+          <input id="roundCount" class="text-input" type="number" min="1" max="30" value="5">
+          <button id="createBtn" class="button button-primary">CREATE ROOM <span>↗</span></button>
+        </div>
+        <div class="option-divider"><span>OR</span></div>
+        <div class="lobby-option">
+          <div class="option-icon">⌁</div>
+          <h3>Join a room</h3>
+          <p>Enter the six-character invite code.</p>
+          <label class="field-label" for="roomCode">ROOM CODE</label>
+          <input id="roomCode" class="text-input code-input" maxlength="6" placeholder="ABC123" autocomplete="off">
+          <button id="joinBtn" class="button button-secondary">JOIN MATCH <span>→</span></button>
+        </div>
+      </div>
+      <p id="lobbyMessage" class="message" role="status"></p>
+    </section>
+
+    <section class="panel game hidden" id="game">
+      <div class="game-topline">
+        <div><span class="section-kicker">02 / LIVE MATCH</span><h2 id="roundTitle">Round 1</h2></div>
+        <div class="room-chip">ROOM <strong id="roomCodeDisplay">------</strong><button id="copyCodeBtn" aria-label="Copy room code" title="Copy room code">▣</button></div>
+      </div>
+
+      <div class="players-row" id="playersRow">
+        <div class="player-card" id="playerCard0">
+          <span class="player-label">PLAYER 1</span><strong id="player0Name">Player 1</strong><span class="player-score"><b id="player0Score">0</b> PTS</span>
+        </div>
+        <div class="versus">VS</div>
+        <div class="player-card" id="playerCard1">
+          <span class="player-label">PLAYER 2</span><strong id="player1Name">Player 2</strong><span class="player-score"><b id="player1Score">0</b> PTS</span>
+        </div>
+      </div>
+
+      <div class="turn-banner" id="turnBanner"><span class="turn-dot"></span><span id="turnText">Waiting for the second player…</span></div>
+
+      <div class="boundary-card">
+        <div class="boundary-caption">YOUR CURRENT SEARCH ZONE</div>
+        <div class="boundary-values"><div><span>LOWER LIMIT</span><strong id="lowerBound">1</strong></div><div class="range-dash">—</div><div><span>UPPER LIMIT</span><strong id="upperBound">100</strong></div></div>
+        <div class="range-track"><div class="range-fill" id="rangeFill"></div></div>
+        <div class="range-foot"><span>MIN 1</span><span>MAX 100</span></div>
+      </div>
+
+      <div class="action-card" id="actionCard">
+        <div id="actionContent">
+          <div class="waiting-symbol">⌛</div><h3>Waiting for players</h3><p>Share the room code with your opponent.</p>
+        </div>
+      </div>
+
+      <div class="history-card">
+        <div class="history-heading"><h3>Guess activity</h3><span id="attemptCount">0 ATTEMPTS</span></div>
+        <div id="historyList" class="history-list"><p class="empty-history">Your match activity will appear here.</p></div>
+      </div>
+      <p id="gameMessage" class="message" role="status"></p>
+    </section>
+
+    <section class="how-section">
+      <span class="section-kicker">THE RULES ARE SIMPLE</span>
+      <div class="how-grid">
+        <article><span>01</span><h3>Set the secret</h3><p>One player privately chooses a whole number from 1 to 100.</p></article>
+        <article><span>02</span><h3>Read the clue</h3><p>The other player guesses. The game says TOO HIGH or TOO LOW.</p></article>
+        <article><span>03</span><h3>Close the gap</h3><p>Each valid guess updates the boundary until the secret is found.</p></article>
+      </div>
+    </section>
+    <footer><span>NUMBER HUNT</span><span>BUILT FOR THE BOUNDARY MINDS.</span></footer>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
