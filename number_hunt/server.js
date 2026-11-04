@@ -1,3 +1,4 @@
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -6,6 +7,7 @@ const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: process.env.ALLOWED_ORIGIN
@@ -24,17 +26,22 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
 function makeCode() {
   let code;
+
   do {
     code = "";
     for (let i = 0; i < 6; i++) {
       code += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
     }
   } while (rooms.has(code));
+
   return code;
 }
 
 function cleanName(value) {
-  return String(value || "Player").trim().replace(/[<>]/g, "").slice(0, 18) || "Player";
+  return String(value || "Player")
+    .trim()
+    .replace(/[<>]/g, "")
+    .slice(0, 18) || "Player";
 }
 
 function publicState(room) {
@@ -45,11 +52,13 @@ function publicState(room) {
     phase: room.phase,
     lower: room.lower,
     upper: room.upper,
+
     players: room.players.map(p => ({
       name: p.name,
-      score: p.score,
+      totalGuesses: p.totalGuesses,
       connected: Boolean(p.socketId)
     })),
+
     setterIndex: room.setterIndex,
     guesserIndex: room.guesserIndex
   };
@@ -66,15 +75,21 @@ function playerForSocket(room, socket) {
 function startRound(room) {
   if (room.roundIndex >= room.rounds) {
     room.phase = "finished";
+
     io.to(room.code).emit("game-over", {
-      players: room.players.map(p => ({ name: p.name, score: p.score }))
+      players: room.players.map(p => ({
+        name: p.name,
+        totalGuesses: p.totalGuesses
+      }))
     });
+
     sendState(room);
     return;
   }
 
   room.setterIndex = room.roundIndex % 2;
   room.guesserIndex = 1 - room.setterIndex;
+
   room.secret = null;
   room.lower = 1;
   room.upper = 100;
@@ -91,19 +106,31 @@ function startRound(room) {
     min: 1,
     max: 100
   });
+
   io.to(guesser.socketId).emit("waiting-for-secret", {
     message: `${setter.name} is choosing a secret number.`
   });
 }
 
 io.on("connection", socket => {
+
   socket.on("create-room", (payload = {}, ack = () => {}) => {
     const rounds = Number(payload.rounds);
-    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 30) {
-      return ack({ ok: false, error: "Choose between 1 and 30 rounds." });
+
+    if (
+      !Number.isInteger(rounds) ||
+      rounds < 2 ||
+      rounds > 30 ||
+      rounds % 2 !== 0
+    ) {
+      return ack({
+        ok: false,
+        error: "Choose an even number of rounds from 2 to 30."
+      });
     }
 
     const code = makeCode();
+
     const room = {
       code,
       rounds,
@@ -115,16 +142,23 @@ io.on("connection", socket => {
       attempts: 0,
       setterIndex: 0,
       guesserIndex: 1,
+
       players: [{
         name: cleanName(payload.name),
-        score: 0,
+        totalGuesses: 0,
         socketId: socket.id
       }]
     };
 
     rooms.set(code, room);
     socket.join(code);
-    ack({ ok: true, code, playerNumber: 1 });
+
+    ack({
+      ok: true,
+      code,
+      playerNumber: 1
+    });
+
     sendState(room);
   });
 
@@ -132,135 +166,201 @@ io.on("connection", socket => {
     const code = String(payload.code || "").trim().toUpperCase();
     const room = rooms.get(code);
 
-    if (!room) return ack({ ok: false, error: "Room not found. Check the code." });
-    if (room.players.length >= 2) return ack({ ok: false, error: "This room already has two players." });
-    if (room.phase !== "waiting") return ack({ ok: false, error: "This game has already started." });
+    if (!room) {
+      return ack({ ok: false, error: "Room not found. Check the code." });
+    }
+
+    if (room.players.length >= 2) {
+      return ack({ ok: false, error: "This room already has two players." });
+    }
+
+    if (room.phase !== "waiting") {
+      return ack({ ok: false, error: "This game has already started." });
+    }
 
     room.players.push({
       name: cleanName(payload.name),
-      score: 0,
+      totalGuesses: 0,
       socketId: socket.id
     });
 
     socket.join(code);
-    ack({ ok: true, code, playerNumber: 2 });
+
+    ack({
+      ok: true,
+      code,
+      playerNumber: 2
+    });
+
     sendState(room);
     startRound(room);
   });
 
   socket.on("set-secret", (payload = {}, ack = () => {}) => {
     const room = rooms.get(String(payload.code || "").toUpperCase());
-    if (!room) return ack({ ok: false, error: "Room not found." });
+
+    if (!room) {
+      return ack({ ok: false, error: "Room not found." });
+    }
 
     const player = playerForSocket(room, socket);
     const secret = Number(payload.secret);
 
-    if (!player || room.phase !== "setting" || room.players[room.setterIndex] !== player) {
-      return ack({ ok: false, error: "It is not your turn to set the secret." });
+    if (
+      !player ||
+      room.phase !== "setting" ||
+      room.players[room.setterIndex] !== player
+    ) {
+      return ack({
+        ok: false,
+        error: "It is not your turn to set the secret."
+      });
     }
+
     if (!Number.isInteger(secret) || secret < 1 || secret > 100) {
-      return ack({ ok: false, error: "Enter a whole number from 1 to 100." });
+      return ack({
+        ok: false,
+        error: "Enter a whole number from 1 to 100."
+      });
     }
 
     room.secret = secret;
     room.phase = "guessing";
+
     ack({ ok: true });
     sendState(room);
 
     const guesser = room.players[room.guesserIndex];
+
     io.to(guesser.socketId).emit("your-guess-turn", {
       lower: room.lower,
       upper: room.upper
     });
-    io.to(room.players[room.setterIndex].socketId).emit("guessing-started", {
+
+    io.to(player.socketId).emit("guessing-started", {
       message: "Your secret is locked in. Wait for the guess."
     });
   });
 
   socket.on("make-guess", (payload = {}, ack = () => {}) => {
     const room = rooms.get(String(payload.code || "").toUpperCase());
-    if (!room) return ack({ ok: false, error: "Room not found." });
+
+    if (!room) {
+      return ack({ ok: false, error: "Room not found." });
+    }
 
     const player = playerForSocket(room, socket);
     const guess = Number(payload.guess);
 
-    if (!player || room.phase !== "guessing" || room.players[room.guesserIndex] !== player) {
-      return ack({ ok: false, error: "It is not your turn to guess." });
+    if (
+      !player ||
+      room.phase !== "guessing" ||
+      room.players[room.guesserIndex] !== player
+    ) {
+      return ack({
+        ok: false,
+        error: "It is not your turn to guess."
+      });
     }
-    if (!Number.isInteger(guess) || guess < room.lower || guess > room.upper) {
-      return ack({ ok: false, error: `Guess must be between ${room.lower} and ${room.upper}.` });
+
+    if (
+      !Number.isInteger(guess) ||
+      guess < room.lower ||
+      guess > room.upper
+    ) {
+      return ack({
+        ok: false,
+        error: `Guess must be between ${room.lower} and ${room.upper}.`
+      });
     }
 
     room.attempts++;
 
+    if (guess === room.secret) {
+      player.totalGuesses += room.attempts;
+      room.phase = "round-complete";
+
+      const result = {
+        outcome: "correct",
+        message: "CORRECT!",
+        guess,
+        attempts: room.attempts,
+        winner: player.name,
+        round: room.roundIndex + 1,
+        totalGuesses: player.totalGuesses
+      };
+
+      io.to(room.code).emit("guess-result", result);
+      sendState(room);
+      ack({ ok: true });
+
+      room.roundIndex++;
+
+      setTimeout(() => {
+        if (rooms.get(room.code) === room) {
+          startRound(room);
+        }
+      }, 2800);
+
+      return;
+    }
+
+    const difference = Math.abs(room.secret - guess);
+    let outcome;
+    let message;
+
     if (guess < room.secret) {
       room.lower = guess + 1;
-      const result = {
-        outcome: "low",
-        message: "TOO LOW",
-        guess,
-        lower: room.lower,
-        upper: room.upper,
-        attempts: room.attempts
-      };
-      io.to(room.code).emit("guess-result", result);
-      sendState(room);
-      ack({ ok: true });
-      io.to(player.socketId).emit("your-guess-turn", {
-        lower: room.lower,
-        upper: room.upper
-      });
-      return;
-    }
 
-    if (guess > room.secret) {
+      if (difference > 10) {
+        outcome = "too-low";
+        message = "TOO LOW";
+      } else {
+        outcome = "low";
+        message = "LOW";
+      }
+    } else {
       room.upper = guess - 1;
-      const result = {
-        outcome: "high",
-        message: "TOO HIGH",
-        guess,
-        lower: room.lower,
-        upper: room.upper,
-        attempts: room.attempts
-      };
-      io.to(room.code).emit("guess-result", result);
-      sendState(room);
-      ack({ ok: true });
-      io.to(player.socketId).emit("your-guess-turn", {
-        lower: room.lower,
-        upper: room.upper
-      });
-      return;
+
+      if (difference > 10) {
+        outcome = "too-high";
+        message = "TOO HIGH";
+      } else {
+        outcome = "high";
+        message = "HIGH";
+      }
     }
 
-    player.score++;
-    room.phase = "round-complete";
     const result = {
-      outcome: "correct",
-      message: "CORRECT!",
+      outcome,
+      message,
       guess,
-      attempts: room.attempts,
-      winner: player.name,
-      round: room.roundIndex + 1
+      lower: room.lower,
+      upper: room.upper,
+      attempts: room.attempts
     };
+
     io.to(room.code).emit("guess-result", result);
     sendState(room);
     ack({ ok: true });
 
-    room.roundIndex++;
-    setTimeout(() => {
-      if (rooms.get(room.code) === room) startRound(room);
-    }, 2800);
+    io.to(player.socketId).emit("your-guess-turn", {
+      lower: room.lower,
+      upper: room.upper
+    });
   });
 
   socket.on("disconnect", () => {
     for (const room of rooms.values()) {
       const player = playerForSocket(room, socket);
+
       if (player) {
         player.socketId = null;
+
         io.to(room.code).emit("opponent-disconnected", {
           message: `${player.name} disconnected. This room will remain unavailable until the server is restarted.`
         });
+
         sendState(room);
       }
     }
